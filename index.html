@@ -1,35 +1,3 @@
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NexusStore</title>
-  
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['system-ui', '-apple-system', 'sans-serif'],
-          }
-        }
-      }
-    }
-  </script>
-
-  <!-- Phosphor Icons -->
-  <script src="https://unpkg.com/@phosphor-icons/web"></script>
-
-  <style>
-    .hide-scrollbar::-webkit-scrollbar { display: none; }
-    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    
-    .custom-scrollbar::-webkit-scrollbar { width: 8px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.5); border-radius: 4px; }
 
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
@@ -316,16 +284,6 @@
     import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // USER FIREBASE CONFIGURATION
-    const myFirebaseConfig = {
-      apiKey: "AIzaSyCj0dXBXU_kElLsrTZBpHYk232hPGO62ho",
-      authDomain: "app-store-e4605.firebaseapp.com",
-      projectId: "app-store-e4605",
-      storageBucket: "app-store-e4605.firebasestorage.app",
-      messagingSenderId: "69260653568",
-      appId: "1:69260653568:web:4381084078ddecdffd54e5",
-      measurementId: "G-KYY1FTGSQ1"
-    };
 
     let db = null;
     let auth = null;
