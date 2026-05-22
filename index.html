@@ -55,6 +55,12 @@
                     <span class="relative z-10">INITIALIZE</span>
                     <div class="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:animate-[shimmer_0.5s_forwards]"></div>
                 </button>
+
+                <!-- Game Mode Switcher (Side Button) -->
+                <button id="modeSwitchBtn" class="absolute right-2 md:right-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center justify-center bg-slate-800/80 hover:bg-slate-700 p-2 md:p-3 rounded-xl border-2 border-slate-600 shadow-xl transition-all hover:scale-110 hover:-translate-x-2 z-20">
+                    <span id="modeIcon" class="text-2xl md:text-3xl mb-1 transition-transform drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">🚀</span>
+                    <span id="modeText" class="text-[10px] md:text-xs font-black text-slate-300 w-16 md:w-20 text-center leading-tight tracking-wider">ROCKET DASH</span>
+                </button>
             </div>
 
             <!-- Game Over Menu -->
@@ -108,6 +114,7 @@
 
         // Game State
         let state = 'MENU'; // MENU, PLAYING, GAMEOVER
+        let gameMode = 'WAVE'; // WAVE, ROCKET
         let score = 0;
         let isHolding = false;
         let gravityInverted = false;
@@ -123,7 +130,7 @@
         let slopeDir = 1;
         
         // Entities
-        let player = { x: Math.min(200, CANVAS_W * 0.3), y: CANVAS_H / 2, size: 8 };
+        let player = { x: Math.min(200, CANVAS_W * 0.3), y: CANVAS_H / 2, size: 8, vy: 0, rot: 0, isGrounded: false };
         let trail = [];
         let particles = [];
         let obstacles = [];
@@ -249,6 +256,9 @@
 
             // Reset Player
             player.y = CANVAS_H / 2;
+            player.vy = 0;
+            player.rot = 0;
+            player.isGrounded = false;
             trail = [];
             particles = [];
             obstacles = [];
@@ -314,10 +324,43 @@
                 score += 0.2;
                 scoreDisplay.innerText = Math.floor(score);
 
-                // Move Player Y (Wave mechanic + Gravity handling)
-                let moveDir = isHolding ? -1 : 1;
-                if (gravityInverted) moveDir *= -1;
-                player.y += moveDir * PLAYER_SPEED;
+                // Move Player Y (Wave/Rocket mechanic + Gravity handling)
+                if (gameMode === 'WAVE') {
+                    let moveDir = isHolding ? -1 : 1;
+                    if (gravityInverted) moveDir *= -1;
+                    player.y += moveDir * PLAYER_SPEED;
+                } else if (gameMode === 'ROCKET') {
+                    // Rocket Physics
+                    let gravForce = PLAYER_SPEED * 0.08; 
+                    let thrustForce = PLAYER_SPEED * 0.16;
+                    
+                    if (gravityInverted) {
+                        if (isHolding) player.vy += thrustForce; // thrust down
+                        else player.vy -= gravForce; // fall up
+                    } else {
+                        if (isHolding) player.vy -= thrustForce; // thrust up
+                        else player.vy += gravForce; // fall down
+                    }
+                    
+                    // Friction/Drag
+                    player.vy *= 0.95;
+                    
+                    // Cap velocity to prevent clipping through walls instantly
+                    player.vy = Math.max(-PLAYER_SPEED * 1.5, Math.min(PLAYER_SPEED * 1.5, player.vy));
+                    player.y += player.vy;
+                } else if (gameMode === 'SAW') {
+                    // Saw Dash Physics
+                    let gravForce = PLAYER_SPEED * 0.15;
+                    if (gravityInverted) player.vy -= gravForce;
+                    else player.vy += gravForce;
+                    
+                    player.vy *= 0.98; // slight drag
+                    player.vy = Math.max(-PLAYER_SPEED * 2.5, Math.min(PLAYER_SPEED * 2.5, player.vy));
+                    player.y += player.vy;
+                    
+                    // Roll rotation
+                    player.rot += (PLAYER_SPEED * 0.04);
+                }
 
                 // Update Trail
                 trail.push({ x: player.x, y: player.y });
@@ -346,9 +389,30 @@
                     const currentTop = terrain[segmentIndex].top * (1 - t) + terrain[segmentIndex + 1].top * t;
                     const currentBottom = terrain[segmentIndex].bottom * (1 - t) + terrain[segmentIndex + 1].bottom * t;
 
-                    // Approximate player radius check
-                    if (player.y - player.size < currentTop || player.y + player.size > currentBottom) {
-                        die();
+                    if (gameMode !== 'SAW') {
+                        // Approximate player radius check
+                        if (player.y - player.size < currentTop || player.y + player.size > currentBottom) {
+                            die();
+                        }
+                    } else {
+                        // Saw Grounding & Slide Physics
+                        player.isGrounded = false;
+                        
+                        // Snap to floor/ceiling
+                        if (player.y + player.size >= currentBottom) {
+                            player.y = currentBottom - player.size;
+                            player.vy = 0;
+                            player.isGrounded = true;
+                        } else if (player.y - player.size <= currentTop) {
+                            player.y = currentTop + player.size;
+                            player.vy = 0;
+                            player.isGrounded = true;
+                        }
+                        
+                        // Crush death if the gap itself is extremely small
+                        if (currentBottom - currentTop <= player.size * 2.5) {
+                            die();
+                        }
                     }
                 }
                 
@@ -686,51 +750,120 @@
                 ctx.translate(player.x, player.y);
                 
                 // Rotation & Gravity handling
-                let baseRot = isHolding ? -Math.PI/4 : Math.PI/4;
-                if (gravityInverted) baseRot = isHolding ? Math.PI/4 : -Math.PI/4;
+                let baseRot = 0;
+                if (gameMode === 'WAVE') {
+                    baseRot = isHolding ? -Math.PI/4 : Math.PI/4;
+                    if (gravityInverted) baseRot = isHolding ? Math.PI/4 : -Math.PI/4;
+                } else if (gameMode === 'ROCKET') {
+                    // Rocket rotation based on velocity
+                    baseRot = player.vy * 0.08;
+                } else if (gameMode === 'SAW') {
+                    baseRot = player.rot;
+                }
                 ctx.rotate(baseRot);
                 
-                if (gravityInverted) {
+                if (gravityInverted && gameMode !== 'SAW') {
                     ctx.scale(1, -1);
                 }
                 
-                // Draw Thruster Glow
-                ctx.beginPath();
-                ctx.arc(-10, 0, Math.random() * 4 + 4, 0, Math.PI*2);
-                ctx.fillStyle = isHolding ? '#ec4899' : '#06b6d4';
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = ctx.fillStyle;
-                ctx.globalCompositeOperation = 'lighter';
-                ctx.fill();
-                ctx.globalCompositeOperation = 'source-over';
+                if (gameMode !== 'SAW') {
+                    // Draw Thruster Glow
+                    ctx.beginPath();
+                    ctx.arc(-10, 0, Math.random() * 4 + 4, 0, Math.PI*2);
+                    ctx.fillStyle = isHolding ? '#ec4899' : '#06b6d4';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = ctx.fillStyle;
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.fill();
+                    ctx.globalCompositeOperation = 'source-over';
+                }
                 
-                // Draw Dart/Arrow Shape
-                ctx.beginPath();
-                ctx.moveTo(16, 0);      // Tip
-                ctx.lineTo(-12, 12);    // Bottom wing
-                ctx.lineTo(-6, 0);      // Inner notch
-                ctx.lineTo(-12, -12);   // Top wing
-                ctx.closePath();
-                
-                ctx.fillStyle = '#ffffff'; 
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = `hsl(${globalHue}, 100%, 70%)`;
-                ctx.fill();
-                
-                ctx.strokeStyle = '#000000';
-                ctx.lineWidth = 1;
-                ctx.shadowBlur = 0;
-                ctx.stroke();
-                
-                // Core
-                ctx.beginPath();
-                ctx.moveTo(8, 0);
-                ctx.lineTo(-6, 4);
-                ctx.lineTo(-2, 0);
-                ctx.lineTo(-6, -4);
-                ctx.closePath();
-                ctx.fillStyle = isHolding ? '#ec4899' : '#06b6d4';
-                ctx.fill();
+                if (gameMode === 'WAVE') {
+                    // Draw Dart/Arrow Shape
+                    ctx.beginPath();
+                    ctx.moveTo(16, 0);      // Tip
+                    ctx.lineTo(-12, 12);    // Bottom wing
+                    ctx.lineTo(-6, 0);      // Inner notch
+                    ctx.lineTo(-12, -12);   // Top wing
+                    ctx.closePath();
+                    
+                    ctx.fillStyle = '#ffffff'; 
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = `hsl(${globalHue}, 100%, 70%)`;
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = 1;
+                    ctx.shadowBlur = 0;
+                    ctx.stroke();
+                    
+                    // Core
+                    ctx.beginPath();
+                    ctx.moveTo(8, 0);
+                    ctx.lineTo(-6, 4);
+                    ctx.lineTo(-2, 0);
+                    ctx.lineTo(-6, -4);
+                    ctx.closePath();
+                    ctx.fillStyle = isHolding ? '#ec4899' : '#06b6d4';
+                    ctx.fill();
+                } else if (gameMode === 'ROCKET') {
+                    // Draw Rocket Shape
+                    // Main Body (Cylinder/Pill)
+                    ctx.beginPath();
+                    ctx.ellipse(2, 0, 16, 8, 0, 0, Math.PI*2);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = `hsl(${globalHue}, 100%, 70%)`;
+                    ctx.fill();
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = '#000000';
+                    ctx.shadowBlur = 0;
+                    ctx.stroke();
+                    
+                    // Front Window/Cockpit
+                    ctx.beginPath();
+                    ctx.arc(10, -2, 4, 0, Math.PI*2);
+                    ctx.fillStyle = '#06b6d4';
+                    ctx.fill();
+                    
+                    // Top and Bottom Fins
+                    ctx.fillStyle = isHolding ? '#ec4899' : '#06b6d4';
+                    ctx.beginPath(); ctx.moveTo(-6, 7); ctx.lineTo(-14, 15); ctx.lineTo(0, 7); ctx.fill();
+                    ctx.beginPath(); ctx.moveTo(-6, -7); ctx.lineTo(-14, -15); ctx.lineTo(0, -7); ctx.fill();
+                    
+                    // Tail Thruster Engine
+                    ctx.beginPath();
+                    ctx.rect(-16, -4, 4, 8);
+                    ctx.fillStyle = '#334155';
+                    ctx.fill();
+                } else if (gameMode === 'SAW') {
+                    // Draw Sawblade / Ball
+                    ctx.beginPath();
+                    for(let i=0; i<12; i++) {
+                        let angle = (i / 12) * Math.PI * 2;
+                        let outer = 12;
+                        let inner = 8;
+                        ctx.lineTo(Math.cos(angle - 0.1) * inner, Math.sin(angle - 0.1) * inner);
+                        ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+                        ctx.lineTo(Math.cos(angle + 0.1) * outer, Math.sin(angle + 0.1) * outer);
+                    }
+                    ctx.closePath();
+                    
+                    ctx.fillStyle = '#010206';
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = `hsl(${globalHue}, 100%, 70%)`;
+                    ctx.stroke();
+                    
+                    // Core
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 4, 0, Math.PI*2);
+                    ctx.fillStyle = gravityInverted ? '#3b82f6' : '#a855f7'; 
+                    ctx.fill();
+                }
 
                 ctx.restore();
             }
@@ -764,7 +897,17 @@
         const handleInputDown = (e) => {
             // Prevent default zooming/scrolling on touch
             if (e.type === 'touchstart') e.preventDefault(); 
-            if (state === 'PLAYING') isHolding = true;
+            if (state === 'PLAYING') {
+                isHolding = true;
+                
+                // Saw Dash click-to-flip mechanics
+                if (gameMode === 'SAW' && player.isGrounded) {
+                    gravityInverted = !gravityInverted;
+                    player.isGrounded = false;
+                    // Add a tiny kick-off velocity so it detaches immediately
+                    player.vy = gravityInverted ? -PLAYER_SPEED * 0.5 : PLAYER_SPEED * 0.5;
+                }
+            }
         };
 
         const handleInputUp = (e) => {
@@ -846,6 +989,42 @@
             } else {
                 btnNoReverse.classList.remove('bg-blue-500', 'text-white');
                 btnNoReverse.classList.add('text-blue-500');
+            }
+        });
+
+        // Mode Switching Logic
+        const modeSwitchBtn = document.getElementById('modeSwitchBtn');
+        const modeIcon = document.getElementById('modeIcon');
+        const modeText = document.getElementById('modeText');
+        const mainTitle = document.querySelector('#startMenu h1');
+        const mainSubtitle = document.querySelector('#startMenu p');
+
+        modeSwitchBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (gameMode === 'WAVE') {
+                gameMode = 'ROCKET';
+                modeIcon.innerText = '⚙️';
+                modeText.innerText = 'SAW DASH';
+                mainTitle.innerText = 'ROCKET DASH';
+                mainTitle.classList.replace('from-pink-500', 'from-orange-500');
+                mainTitle.classList.replace('to-cyan-500', 'to-yellow-500');
+                mainSubtitle.innerText = 'Hold to THRUST, Release to FALL';
+            } else if (gameMode === 'ROCKET') {
+                gameMode = 'SAW';
+                modeIcon.innerText = '🌊';
+                modeText.innerText = 'WAVE DASH';
+                mainTitle.innerText = 'SAW DASH';
+                mainTitle.classList.replace('from-orange-500', 'from-red-500');
+                mainTitle.classList.replace('to-yellow-500', 'to-purple-500');
+                mainSubtitle.innerText = 'Tap to FLIP GRAVITY (On surfaces only)';
+            } else {
+                gameMode = 'WAVE';
+                modeIcon.innerText = '🚀';
+                modeText.innerText = 'ROCKET DASH';
+                mainTitle.innerText = 'WAVE DASH';
+                mainTitle.classList.replace('from-red-500', 'from-pink-500');
+                mainTitle.classList.replace('to-purple-500', 'to-cyan-500');
+                mainSubtitle.innerText = 'Hold to fly UP, Release to dive DOWN';
             }
         });
 
