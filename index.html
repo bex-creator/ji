@@ -35,7 +35,16 @@
             <!-- Main Menu -->
             <div id="startMenu" class="pointer-events-auto flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-md absolute inset-0 transition-opacity duration-500">
                 <h1 class="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-cyan-500 mb-2 italic tracking-tighter drop-shadow-[0_0_15px_rgba(236,72,153,0.5)]">WAVE DASH</h1>
-                <p class="text-slate-400 mb-10 text-lg md:text-xl font-medium tracking-wide animate-pulse">Hold to fly UP, Release to dive DOWN</p>
+                <p class="text-slate-400 mb-8 text-lg md:text-xl font-medium tracking-wide animate-pulse">Hold to fly UP, Release to dive DOWN</p>
+                
+                <!-- Difficulty Selector -->
+                <div class="flex flex-wrap justify-center gap-3 mb-10" id="diffSelector">
+                    <button class="diff-btn px-5 py-2 rounded-full border-2 border-emerald-500 text-emerald-500 hover:bg-white/10 font-black tracking-wider transition-all" data-diff="EASY">EASY</button>
+                    <button class="diff-btn px-5 py-2 rounded-full border-2 border-cyan-500 bg-cyan-500 text-slate-900 font-black tracking-wider transition-all" data-diff="NORMAL">NORMAL</button>
+                    <button class="diff-btn px-5 py-2 rounded-full border-2 border-orange-500 text-orange-500 hover:bg-white/10 font-black tracking-wider transition-all" data-diff="HARD">HARD</button>
+                    <button class="diff-btn px-5 py-2 rounded-full border-2 border-red-500 text-red-500 hover:bg-white/10 font-black tracking-wider transition-all" data-diff="EXTREME">EXTREME</button>
+                </div>
+
                 <button id="startBtn" class="group relative px-10 py-5 bg-emerald-500 text-slate-900 font-black text-2xl md:text-3xl rounded-full shadow-[0_0_30px_rgba(16,185,129,0.4)] hover:shadow-[0_0_50px_rgba(16,185,129,0.8)] transition-all transform hover:scale-105 active:scale-95 overflow-hidden">
                     <span class="relative z-10">INITIALIZE</span>
                     <div class="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:animate-[shimmer_0.5s_forwards]"></div>
@@ -78,8 +87,17 @@
         let CANVAS_W = window.innerWidth;
         let CANVAS_H = window.innerHeight;
         const SEGMENT_WIDTH = 100; // Must match player speed for 45-degree slope ratio
-        const PLAYER_SPEED = 8;    // Forward speed AND vertical speed
+        let PLAYER_SPEED = 8;    // Forward speed AND vertical speed
         
+        // Difficulty Settings
+        const DIFFICULTY_CONFIG = {
+            EASY: { speed: 5.5, startGap: 450, minGap: 150, obsTimerBase: 400, colorBtn: 'bg-emerald-500', colorText: 'text-emerald-500' },
+            NORMAL: { speed: 8, startGap: 350, minGap: 90, obsTimerBase: 250, colorBtn: 'bg-cyan-500', colorText: 'text-cyan-500' },
+            HARD: { speed: 11, startGap: 280, minGap: 65, obsTimerBase: 150, colorBtn: 'bg-orange-500', colorText: 'text-orange-500' },
+            EXTREME: { speed: 15, startGap: 220, minGap: 45, obsTimerBase: 80, colorBtn: 'bg-red-500', colorText: 'text-red-500' }
+        };
+        let currentDifficulty = 'NORMAL';
+
         // Game State
         let state = 'MENU'; // MENU, PLAYING, GAMEOVER
         let score = 0;
@@ -195,10 +213,11 @@
             currentCenterY += (dir * SEGMENT_WIDTH);
             
             // Difficulty scaling with organic expanding/contracting (wobble)
+            const config = DIFFICULTY_CONFIG[currentDifficulty];
             const maxSafeGap = CANVAS_H * 0.75; // Prevent gaps larger than the screen
-            const baseTargetGap = Math.max(90, Math.min(maxSafeGap, 350 - (score / 12)));
+            const baseTargetGap = Math.max(config.minGap, Math.min(maxSafeGap, config.startGap - (score / 12)));
             const wobble = Math.sin(score / 10) * 60; // Tunnel breathes in and out
-            const targetGap = Math.max(90, Math.min(maxSafeGap, baseTargetGap + wobble));
+            const targetGap = Math.max(config.minGap, Math.min(maxSafeGap, baseTargetGap + wobble));
             
             // Smooth gap transitions for non-choke patterns
             if (pattern !== 'CHOKE') {
@@ -216,12 +235,16 @@
             score = 0;
             isHolding = false;
             
+            // Apply Difficulty Settings
+            const config = DIFFICULTY_CONFIG[currentDifficulty];
+            PLAYER_SPEED = config.speed;
+
             // Reset Player
             player.y = CANVAS_H / 2;
             trail = [];
             particles = [];
             obstacles = [];
-            obstacleTimer = 200;
+            obstacleTimer = config.obsTimerBase;
             gravityInverted = false;
             screenFlash = 0;
             
@@ -229,7 +252,7 @@
             terrain = [];
             terrainXOffset = 0;
             currentCenterY = CANVAS_H / 2;
-            currentGap = Math.min(350, CANVAS_H * 0.6); // Scale starting gap for smaller screens
+            currentGap = Math.min(config.startGap, CANVAS_H * 0.6); // Scale starting gap for smaller screens
             patternSteps = 5;
             pattern = 'FLAT';
             
@@ -377,7 +400,7 @@
                             });
                         }
                     }
-                    obstacleTimer = 250 + Math.random() * 300; 
+                    obstacleTimer = DIFFICULTY_CONFIG[currentDifficulty].obsTimerBase + Math.random() * 300; 
                 }
 
                 // Update Obstacles & Check Collisions
@@ -753,6 +776,27 @@
             gameOverMenu.classList.add('hidden');
             gameOverMenu.classList.remove('flex');
             initGame();
+        });
+
+        // Difficulty Selection Logic
+        const diffButtons = document.querySelectorAll('.diff-btn');
+        diffButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                currentDifficulty = btn.dataset.diff;
+                
+                // Update UI for all buttons
+                diffButtons.forEach(b => {
+                    const diff = b.dataset.diff;
+                    if (diff === currentDifficulty) {
+                        b.classList.add(DIFFICULTY_CONFIG[diff].colorBtn, 'text-slate-900');
+                        b.classList.remove(DIFFICULTY_CONFIG[diff].colorText, 'hover:bg-white/10');
+                    } else {
+                        b.classList.remove(DIFFICULTY_CONFIG[diff].colorBtn, 'text-slate-900');
+                        b.classList.add(DIFFICULTY_CONFIG[diff].colorText, 'hover:bg-white/10');
+                    }
+                });
+            });
         });
 
         // Start Loop
