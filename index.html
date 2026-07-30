@@ -2,1034 +2,856 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Wave Dash</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal File Assembler & Game Engine</title>
+    <!-- JSZip for processing ZIP archives in-browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,900;1,900&display=swap');
-        body { font-family: 'Montserrat', sans-serif; overflow: hidden; touch-action: none; background-color: #020617; }
-        canvas { 
-            image-rendering: optimizeSpeed; 
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --game-accent: #10b981;
+            --game-hover: #059669;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1150px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        header { text-align: center; }
+        header h1 { font-size: 2.2rem; margin-bottom: 0.5rem; }
+        header p { color: var(--text-muted); }
+
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            background-color: var(--card-bg);
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--accent);
+            background-color: #1e293b80;
+        }
+
+        .actions-bar {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        input[type="file"] { display: none; }
+
+        .btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.65rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .btn:hover { background-color: var(--accent-hover); }
+        .btn-game { background-color: var(--game-accent); }
+        .btn-game:hover { background-color: var(--game-hover); }
+        .btn-danger { background-color: #ef4444; }
+        .btn-danger:hover { background-color: #dc2626; }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 850px) {
+            .main-layout { grid-template-columns: 1fr; }
+        }
+
+        .file-list-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            max-height: 600px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .file-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .file-list-header h3 { font-size: 1rem; color: var(--text-muted); }
+
+        .file-items-container { overflow-y: auto; flex-grow: 1; }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.65rem 0.8rem;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 0.5rem;
+            background-color: #0f172a50;
+            border: 1px solid transparent;
+            transition: background 0.2s, border 0.2s;
+        }
+
+        .file-item:hover, .file-item.active {
+            background-color: #334155;
+            border-color: var(--accent);
+        }
+
+        .file-info { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .file-name {
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+        }
+
+        .file-badge {
+            font-size: 0.65rem;
+            padding: 2px 5px;
+            border-radius: 4px;
+            margin-left: 6px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge-html { background: #10b98130; color: #34d399; }
+        .badge-css { background: #0284c730; color: #38bdf8; }
+        .badge-js { background: #eab30830; color: #fde047; }
+        .badge-img { background: #ec489930; color: #f472b6; }
+        .badge-media { background: #a855f730; color: #c084fc; }
+
+        .file-size { font-size: 0.75rem; color: var(--text-muted); }
+
+        .player-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 560px;
+            position: relative;
+        }
+
+        .player-content {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1;
+        }
+
+        video, audio { width: 100%; max-height: 480px; border-radius: 8px; outline: none; }
+        img { max-width: 100%; max-height: 500px; border-radius: 8px; object-fit: contain; }
+
+        iframe {
+            width: 100%;
+            height: 520px;
+            border: none;
+            border-radius: 8px;
+            background: #000;
+        }
+
+        pre {
+            width: 100%;
+            max-height: 500px;
+            overflow: auto;
+            background: #0f172a;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .placeholder { color: var(--text-muted); text-align: center; padding: 2rem; }
+
+        #game-canvas {
+            background-color: #0f172a;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5);
+        }
+
+        .assembly-status {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: #10b98115;
+            border: 1px solid #10b98140;
+            border-radius: 8px;
+            color: #34d399;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .banner-buttons {
+            display: flex;
+            gap: 0.5rem;
         }
     </style>
 </head>
-<body class="w-screen h-screen flex items-center justify-center text-white select-none overflow-hidden bg-[#05020a]">
+<body>
 
-    <!-- Game Container -->
-    <div class="relative w-full h-full flex items-center justify-center">
-        
-        <!-- The Canvas -->
-        <canvas id="gameCanvas" class="absolute inset-0 w-full h-full"></canvas>
+<div class="container">
+    <header>
+        <h1>⚡ Full-Assembly Universal File Player</h1>
+        <p>Upload files individually, in folders, or ZIPs—the engine links HTML, CSS, JavaScript, pictures, and audio together automatically.</p>
+    </header>
 
-        <!-- UI Overlays -->
-        <div id="uiLayer" class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-10">
-            
-            <!-- In-Game HUD -->
-            <div id="hud" class="absolute top-8 left-0 right-0 flex justify-center opacity-0 transition-opacity duration-300">
-                <div class="bg-slate-900/80 backdrop-blur px-6 py-2 rounded-full border border-slate-700 shadow-lg">
-                    <span class="text-slate-400 font-bold tracking-widest text-sm uppercase">Score</span>
-                    <span id="scoreDisplay" class="ml-3 text-3xl font-black text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]">0</span>
-                </div>
-            </div>
-
-            <!-- Main Menu -->
-            <div id="startMenu" class="pointer-events-auto flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-md absolute inset-0 transition-opacity duration-500">
-                <h1 class="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-cyan-500 mb-2 italic tracking-tighter drop-shadow-[0_0_15px_rgba(236,72,153,0.5)]">WAVE DASH</h1>
-                <p class="text-slate-400 mb-8 text-lg md:text-xl font-medium tracking-wide animate-pulse">Hold to fly UP, Release to dive DOWN</p>
-                
-                <!-- Difficulty Selector -->
-                <div class="flex flex-wrap justify-center gap-3 mb-6" id="diffSelector">
-                    <button class="diff-btn px-5 py-2 rounded-full border-2 border-emerald-500 text-emerald-500 hover:bg-white/10 font-black tracking-wider transition-all" data-diff="EASY">EASY</button>
-                    <button class="diff-btn px-5 py-2 rounded-full border-2 border-cyan-500 bg-cyan-500 text-slate-900 font-black tracking-wider transition-all" data-diff="NORMAL">NORMAL</button>
-                    <button class="diff-btn px-5 py-2 rounded-full border-2 border-orange-500 text-orange-500 hover:bg-white/10 font-black tracking-wider transition-all" data-diff="HARD">HARD</button>
-                    <button class="diff-btn px-5 py-2 rounded-full border-2 border-red-500 text-red-500 hover:bg-white/10 font-black tracking-wider transition-all" data-diff="EXTREME">EXTREME</button>
-                </div>
-
-                <!-- Modifiers Selector -->
-                <div class="flex flex-wrap justify-center gap-4 mb-10" id="modSelector">
-                    <button id="btnVisuals" class="px-4 py-2 rounded-full border-2 border-purple-500 text-purple-500 hover:bg-purple-500/20 font-bold tracking-wide transition-all">✨ OVERDRIVE VISUALS</button>
-                    <button id="btnNoReverse" class="px-4 py-2 rounded-full border-2 border-blue-500 text-blue-500 hover:bg-blue-500/20 font-bold tracking-wide transition-all">🚫 NO REVERSE</button>
-                </div>
-
-                <button id="startBtn" class="group relative px-10 py-5 bg-emerald-500 text-slate-900 font-black text-2xl md:text-3xl rounded-full shadow-[0_0_30px_rgba(16,185,129,0.4)] hover:shadow-[0_0_50px_rgba(16,185,129,0.8)] transition-all transform hover:scale-105 active:scale-95 overflow-hidden">
-                    <span class="relative z-10">INITIALIZE</span>
-                    <div class="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:animate-[shimmer_0.5s_forwards]"></div>
-                </button>
-
-                <!-- Game Mode Switcher (Side Button) -->
-                <button id="modeSwitchBtn" class="absolute right-2 md:right-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center justify-center bg-slate-800/80 hover:bg-slate-700 p-2 md:p-3 rounded-xl border-2 border-slate-600 shadow-xl transition-all hover:scale-110 hover:-translate-x-2 z-20">
-                    <span id="modeIcon" class="text-2xl md:text-3xl mb-1 transition-transform drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">🚀</span>
-                    <span id="modeText" class="text-[10px] md:text-xs font-black text-slate-300 w-16 md:w-20 text-center leading-tight tracking-wider">ROCKET DASH</span>
-                </button>
-            </div>
-
-            <!-- Game Over Menu -->
-            <div id="gameOverMenu" class="pointer-events-auto hidden flex-col items-center justify-center bg-red-950/90 backdrop-blur-md absolute inset-0 transition-opacity duration-500">
-                <h2 class="text-5xl md:text-7xl font-black text-red-500 mb-4 italic tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]">CRASHED!</h2>
-                <div class="flex items-center gap-4 mb-10 text-2xl md:text-3xl">
-                    <span class="text-slate-300 font-medium">Final Score:</span>
-                    <span id="finalScore" class="font-black text-white">0</span>
-                </div>
-                <button id="restartBtn" class="px-10 py-5 bg-white text-red-900 font-black text-2xl md:text-3xl rounded-full shadow-[0_0_30px_rgba(255,255,255,0.4)] hover:shadow-[0_0_50px_rgba(255,255,255,0.8)] transition-all transform hover:scale-105 active:scale-95">
-                    TRY AGAIN
-                </button>
-            </div>
-
+    <div class="upload-zone" id="drop-zone">
+        <h3>Drag & Drop Files, Folders, or ZIP Packages</h3>
+        <p>Drop <code>.html</code>, <code>.css</code>, <code>.js</code>, images, and audio files all at once!</p>
+        <div class="actions-bar">
+            <button class="btn" onclick="document.getElementById('file-input').click()">📁 Select Files</button>
+            <button class="btn" onclick="document.getElementById('folder-input').click()">📂 Select Folder</button>
+            <button class="btn btn-game" onclick="launchBuiltInArcade()">🎮 Play Retro Arcade</button>
+            <button class="btn btn-danger" onclick="clearVFS()">🗑️ Reset</button>
         </div>
+        <input type="file" id="file-input" multiple>
+        <input type="file" id="folder-input" webkitdirectory directory multiple>
     </div>
 
-    <style>
-        @keyframes shimmer {
-            100% { transform: translateX(100%); }
+    <div class="main-layout">
+        <div class="file-list-card">
+            <div class="file-list-header">
+                <h3>Assembled VFS (<span id="file-count">0</span>)</h3>
+            </div>
+            <div class="file-items-container" id="file-list">
+                <p class="placeholder" style="font-size: 0.85rem;">No files loaded into memory.</p>
+            </div>
+        </div>
+
+        <div class="player-card" id="player-card-container">
+            <div id="assembly-banner" style="display: none; width: 100%;"></div>
+            <div class="player-content" id="media-display">
+                <p class="placeholder">Upload files or click <b>Play Retro Arcade</b> to start playing!</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- VIRTUAL FILE SYSTEM (VFS) STATE ---
+    const vfs = new Map();
+    let gameInterval = null;
+
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const folderInput = document.getElementById('folder-input');
+    const fileListEl = document.getElementById('file-list');
+    const mediaDisplay = document.getElementById('media-display');
+    const fileCountEl = document.getElementById('file-count');
+    const assemblyBanner = document.getElementById('assembly-banner');
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => dropZone.addEventListener(evt, preventDefaults, false));
+    function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+
+    ['dragenter', 'dragover'].forEach(evt => dropZone.addEventListener(evt, () => dropZone.classList.add('dragover'), false));
+    ['dragleave', 'drop'].forEach(evt => dropZone.addEventListener(evt, () => dropZone.classList.remove('dragover'), false));
+
+    dropZone.addEventListener('drop', async (e) => {
+        const items = e.dataTransfer.items;
+        if (items) {
+            const entries = await getFilesFromDataTransferItems(items);
+            await processFiles(entries);
+        } else {
+            await handleFileList(e.dataTransfer.files);
         }
-    </style>
+    });
 
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        
-        // UI Elements
-        const startMenu = document.getElementById('startMenu');
-        const gameOverMenu = document.getElementById('gameOverMenu');
-        const hud = document.getElementById('hud');
-        const scoreDisplay = document.getElementById('scoreDisplay');
-        const finalScore = document.getElementById('finalScore');
-        
-        // Game State Variables
-        let CANVAS_W = window.innerWidth;
-        let CANVAS_H = window.innerHeight;
-        const SEGMENT_WIDTH = 100; // Must match player speed for 45-degree slope ratio
-        let PLAYER_SPEED = 8;    // Forward speed AND vertical speed
-        
-        // Difficulty Settings
-        const DIFFICULTY_CONFIG = {
-            EASY: { speed: 5.5, startGap: 450, minGap: 150, obsTimerBase: 400, colorBtn: 'bg-emerald-500', colorText: 'text-emerald-500' },
-            NORMAL: { speed: 8, startGap: 350, minGap: 90, obsTimerBase: 250, colorBtn: 'bg-cyan-500', colorText: 'text-cyan-500' },
-            HARD: { speed: 11, startGap: 280, minGap: 65, obsTimerBase: 150, colorBtn: 'bg-orange-500', colorText: 'text-orange-500' },
-            EXTREME: { speed: 15, startGap: 220, minGap: 45, obsTimerBase: 80, colorBtn: 'bg-red-500', colorText: 'text-red-500' }
-        };
-        let currentDifficulty = 'NORMAL';
-        let isOverdrive = false;
-        let isNoReverse = false;
+    fileInput.addEventListener('change', async (e) => await handleFileList(e.target.files));
+    folderInput.addEventListener('change', async (e) => await handleFileList(e.target.files));
 
-        // Game State
-        let state = 'MENU'; // MENU, PLAYING, GAMEOVER
-        let gameMode = 'WAVE'; // WAVE, ROCKET
-        let score = 0;
-        let isHolding = false;
-        let gravityInverted = false;
-        let screenFlash = 0;
-        
-        // World Generation State
-        let terrain = [];
-        let terrainXOffset = 0;
-        let currentCenterY = CANVAS_H / 2;
-        let currentGap = 350;
-        let pattern = 'FLAT';
-        let patternSteps = 0;
-        let slopeDir = 1;
-        
-        // Entities
-        let player = { x: Math.min(200, CANVAS_W * 0.3), y: CANVAS_H / 2, size: 8, vy: 0, rot: 0, isGrounded: false };
-        let trail = [];
-        let particles = [];
-        let obstacles = [];
-        let obstacleTimer = 0;
+    async function handleFileList(fileList) {
+        const entries = Array.from(fileList).map(file => ({
+            file,
+            path: file.webkitRelativePath || file.name
+        }));
+        await processFiles(entries);
+    }
 
-        // --- Visual Enhancements ---
-        let globalHue = 0;
-        let stars = [];
-        
-        function initStars() {
-            stars = [];
-            let numStars = Math.floor((CANVAS_W * CANVAS_H) / 4000);
-            for(let i=0; i<numStars; i++) {
-                stars.push({
-                    x: Math.random() * CANVAS_W,
-                    y: Math.random() * CANVAS_H,
-                    size: Math.random() * 2 + 0.2,
-                    speed: Math.random() * 0.8 + 0.1
-                });
-            }
-        }
-
-        function resize() {
-            CANVAS_W = window.innerWidth;
-            CANVAS_H = window.innerHeight;
-            canvas.width = CANVAS_W;
-            canvas.height = CANVAS_H;
-            player.x = Math.min(200, CANVAS_W * 0.3);
-            if(state === 'MENU') {
-                player.y = CANVAS_H / 2;
-                currentCenterY = CANVAS_H / 2;
-            }
-            initStars();
-        }
-        
-        window.addEventListener('resize', resize);
-        resize(); // Initialize sizes
-
-        // --- Core Engine & Generation ---
-
-        function getNextTerrainSegment() {
-            // Pattern logic to generate enjoyable wave tunnels
-            if (patternSteps <= 0) {
-                let r = Math.random();
-                if (r < 0.10) {
-                    pattern = 'FLAT'; 
-                    patternSteps = 1 + Math.floor(Math.random() * 2);
-                } else if (r < 0.45) {
-                    pattern = 'CHAOS'; // Unpredictable random jukes
-                    patternSteps = 3 + Math.floor(Math.random() * 6);
-                } else if (r < 0.60) {
-                    pattern = 'ZIGZAG'; 
-                    patternSteps = 2 + Math.floor(Math.random() * 4); // Short bursts
-                } else if (r < 0.75) {
-                    pattern = 'ASCEND'; 
-                    patternSteps = 1 + Math.floor(Math.random() * 3);
-                } else if (r < 0.90) {
-                    pattern = 'DESCEND'; 
-                    patternSteps = 1 + Math.floor(Math.random() * 3);
-                } else {
-                    pattern = 'CHOKE';
-                    patternSteps = 2 + Math.floor(Math.random() * 3);
+    async function getFilesFromDataTransferItems(items) {
+        const fileEntries = [];
+        const queue = [];
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.kind === 'file') {
+                const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+                if (entry) queue.push({ entry, path: '' });
+                else {
+                    const f = item.getAsFile();
+                    if (f) fileEntries.push({ file: f, path: f.name });
                 }
             }
-
-            let dir = 0;
-            let stepGap = currentGap;
-
-            if (pattern === 'ZIGZAG') {
-                dir = (patternSteps % 2 === 0) ? 1 : -1;
-            } else if (pattern === 'ASCEND') {
-                dir = -1;
-            } else if (pattern === 'DESCEND') {
-                dir = 1;
-            } else if (pattern === 'CHOKE') {
-                dir = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
-                stepGap = currentGap * (0.35 + Math.random() * 0.3); // 35% to 65% of current gap! Very sudden.
-            } else if (pattern === 'CHAOS') {
-                dir = Math.floor(Math.random() * 3) - 1; // Randomly go up, down, or straight
+        }
+        while (queue.length > 0) {
+            const { entry, path } = queue.shift();
+            if (entry.isFile) {
+                const file = await new Promise(res => entry.file(res));
+                fileEntries.push({ file, path: path + file.name });
+            } else if (entry.isDirectory) {
+                const dirReader = entry.createReader();
+                const entries = await new Promise(res => dirReader.readEntries(res));
+                for (const child of entries) {
+                    queue.push({ entry: child, path: path + entry.name + '/' });
+                }
             }
-            patternSteps--;
+        }
+        return fileEntries;
+    }
 
-            // Bounce off boundaries to keep tunnel in screen
-            const padding = 50 + (stepGap / 2);
-            if (currentCenterY + (dir * SEGMENT_WIDTH) < padding) { 
-                dir = 1; 
-                // Sometimes force a dive, sometimes let chaos resume
-                if (Math.random() > 0.5) { pattern = 'DESCEND'; patternSteps = 2; }
-            }
-            if (currentCenterY + (dir * SEGMENT_WIDTH) > CANVAS_H - padding) { 
-                dir = -1; 
-                if (Math.random() > 0.5) { pattern = 'ASCEND'; patternSteps = 2; }
-            }
+    async function processFiles(fileEntries) {
+        if (fileEntries.length === 0) return;
 
-            currentCenterY += (dir * SEGMENT_WIDTH);
-            
-            // Difficulty scaling with organic expanding/contracting (wobble)
-            const config = DIFFICULTY_CONFIG[currentDifficulty];
-            const maxSafeGap = CANVAS_H * 0.75; // Prevent gaps larger than the screen
-            const baseTargetGap = Math.max(config.minGap, Math.min(maxSafeGap, config.startGap - (score / 12)));
-            const wobble = Math.sin(score / 10) * 60; // Tunnel breathes in and out
-            const targetGap = Math.max(config.minGap, Math.min(maxSafeGap, baseTargetGap + wobble));
-            
-            // Smooth gap transitions for non-choke patterns
-            if (pattern !== 'CHOKE') {
-                currentGap += (targetGap - currentGap) * 0.15;
-            }
-
-            return {
-                top: currentCenterY - stepGap / 2,
-                bottom: currentCenterY + stepGap / 2
-            };
+        const zipEntry = fileEntries.find(e => e.file.name.toLowerCase().endsWith('.zip'));
+        if (zipEntry) {
+            await extractZip(zipEntry.file);
+            return;
         }
 
-        function initGame() {
-            state = 'PLAYING';
-            score = 0;
-            isHolding = false;
-            
-            // Apply Difficulty Settings
-            const config = DIFFICULTY_CONFIG[currentDifficulty];
-            PLAYER_SPEED = config.speed;
-
-            // Reset Player
-            player.y = CANVAS_H / 2;
-            player.vy = 0;
-            player.rot = 0;
-            player.isGrounded = false;
-            trail = [];
-            particles = [];
-            obstacles = [];
-            obstacleTimer = config.obsTimerBase;
-            gravityInverted = false;
-            screenFlash = 0;
-            
-            // Reset Terrain
-            terrain = [];
-            terrainXOffset = 0;
-            currentCenterY = CANVAS_H / 2;
-            currentGap = Math.min(config.startGap, CANVAS_H * 0.6); // Scale starting gap for smaller screens
-            patternSteps = 5;
-            pattern = 'FLAT';
-            
-            // Pre-fill terrain array
-            const numSegments = Math.ceil(CANVAS_W / SEGMENT_WIDTH) + 2;
-            for(let i = 0; i < numSegments; i++) {
-                if(i < 4) {
-                    // Start completely flat and safe
-                    terrain.push({ top: currentCenterY - currentGap/2, bottom: currentCenterY + currentGap/2 });
-                } else {
-                    terrain.push(getNextTerrainSegment());
-                }
-            }
-
-            // Update UI
-            startMenu.classList.add('hidden');
-            gameOverMenu.classList.add('hidden');
-            hud.classList.remove('opacity-0');
+        for (const { file, path } of fileEntries) {
+            await addFileToVFS(file, path);
         }
 
-        function die() {
-            state = 'GAMEOVER';
-            
-            // Explode into particles
-            let pCount = isOverdrive ? 150 : 50;
-            for(let i=0; i<pCount; i++) {
-                particles.push({
-                    x: player.x,
-                    y: player.y,
-                    vx: (Math.random() - 0.5) * (isOverdrive ? 40 : 25),
-                    vy: (Math.random() - 0.5) * (isOverdrive ? 40 : 25),
-                    size: Math.random() * (isOverdrive ? 15 : 10) + 4,
-                    color: `hsl(${globalHue + (Math.random()*60 - 30)}, 100%, 60%)`,
-                    life: isOverdrive ? 1.5 : 1.0
-                });
-            }
+        renderVFSList();
+        autoRunAssembledProject();
+    }
 
-            // Update UI
-            hud.classList.add('opacity-0');
-            finalScore.innerText = Math.floor(score);
-            setTimeout(() => {
-                gameOverMenu.classList.remove('hidden');
-                gameOverMenu.classList.add('flex');
-            }, 500); // Delay menu slightly for explosion effect
-        }
-
-        // --- Logic Update ---
-
-        function update() {
-            if (state === 'PLAYING') {
-                score += 0.2;
-                scoreDisplay.innerText = Math.floor(score);
-
-                // Move Player Y (Wave/Rocket mechanic + Gravity handling)
-                if (gameMode === 'WAVE') {
-                    let moveDir = isHolding ? -1 : 1;
-                    if (gravityInverted) moveDir *= -1;
-                    player.y += moveDir * PLAYER_SPEED;
-                } else if (gameMode === 'ROCKET') {
-                    // Rocket Physics
-                    let gravForce = PLAYER_SPEED * 0.08; 
-                    let thrustForce = PLAYER_SPEED * 0.16;
-                    
-                    if (gravityInverted) {
-                        if (isHolding) player.vy += thrustForce; // thrust down
-                        else player.vy -= gravForce; // fall up
-                    } else {
-                        if (isHolding) player.vy -= thrustForce; // thrust up
-                        else player.vy += gravForce; // fall down
-                    }
-                    
-                    // Friction/Drag
-                    player.vy *= 0.95;
-                    
-                    // Cap velocity to prevent clipping through walls instantly
-                    player.vy = Math.max(-PLAYER_SPEED * 1.5, Math.min(PLAYER_SPEED * 1.5, player.vy));
-                    player.y += player.vy;
-                } else if (gameMode === 'SAW') {
-                    // Saw Dash Physics
-                    let gravForce = PLAYER_SPEED * 0.15;
-                    if (gravityInverted) player.vy -= gravForce;
-                    else player.vy += gravForce;
-                    
-                    player.vy *= 0.98; // slight drag
-                    player.vy = Math.max(-PLAYER_SPEED * 2.5, Math.min(PLAYER_SPEED * 2.5, player.vy));
-                    player.y += player.vy;
-                    
-                    // Roll rotation
-                    player.rot += (PLAYER_SPEED * 0.04);
-                }
-
-                // Update Trail
-                trail.push({ x: player.x, y: player.y });
-                if (trail.length > 25) trail.shift();
-                // Move trail backwards to match world
-                for (let i = 0; i < trail.length; i++) {
-                    trail[i].x -= PLAYER_SPEED;
-                }
-
-                // Move World Left
-                terrainXOffset += PLAYER_SPEED;
-                if (terrainXOffset >= SEGMENT_WIDTH) {
-                    terrain.shift();
-                    terrain.push(getNextTerrainSegment());
-                    terrainXOffset -= SEGMENT_WIDTH;
-                }
-
-                // Collision Detection
-                // Calculate exactly which segment the player is currently inside
-                const relativeX = player.x + terrainXOffset;
-                const segmentIndex = Math.floor(relativeX / SEGMENT_WIDTH);
-                const t = (relativeX % SEGMENT_WIDTH) / SEGMENT_WIDTH; // Local interpolation ratio (0 to 1)
-
-                if (segmentIndex >= 0 && segmentIndex < terrain.length - 1) {
-                    // Linear interpolation to find the exact boundary Y at the player's X
-                    const currentTop = terrain[segmentIndex].top * (1 - t) + terrain[segmentIndex + 1].top * t;
-                    const currentBottom = terrain[segmentIndex].bottom * (1 - t) + terrain[segmentIndex + 1].bottom * t;
-
-                    if (gameMode !== 'SAW') {
-                        // Approximate player radius check
-                        if (player.y - player.size < currentTop || player.y + player.size > currentBottom) {
-                            die();
-                        }
-                    } else {
-                        // Saw Grounding & Slide Physics
-                        player.isGrounded = false;
-                        
-                        // Snap to floor/ceiling
-                        if (player.y + player.size >= currentBottom) {
-                            player.y = currentBottom - player.size;
-                            player.vy = 0;
-                            player.isGrounded = true;
-                        } else if (player.y - player.size <= currentTop) {
-                            player.y = currentTop + player.size;
-                            player.vy = 0;
-                            player.isGrounded = true;
-                        }
-                        
-                        // Crush death if the gap itself is extremely small
-                        if (currentBottom - currentTop <= player.size * 2.5) {
-                            die();
-                        }
-                    }
-                }
-                
-                // Obstacle Generation
-                obstacleTimer -= PLAYER_SPEED;
-                if (obstacleTimer <= 0 && score > 5) {
-                    let rightTop = terrain[terrain.length-1].top;
-                    let rightBottom = terrain[terrain.length-1].bottom;
-                    let center = (rightTop + rightBottom) / 2;
-                    let gap = rightBottom - rightTop;
-                    
-                    // Only spawn if gap is decently wide and pattern isn't a tight choke
-                    if (gap > 180 && pattern !== 'CHOKE') {
-                        let typeRnd = Math.random();
-                        if (isNoReverse && typeRnd < 0.15) typeRnd = 0.3; // Convert portal to box
-                        
-                        if (typeRnd < 0.15) { // 15% chance for a Gravity Portal
-                            obstacles.push({
-                                x: CANVAS_W + 100,
-                                y: center,
-                                w: 40, h: gap * 0.9,
-                                type: 'portal_grav',
-                                passed: false,
-                                color: gravityInverted ? '#3b82f6' : '#a855f7' // Blue if returning, Purple if inverting
-                            });
-                        } else if (typeRnd < 0.45) { // 30% chance Static Box
-                            let size = 40 + Math.random() * 40;
-                            obstacles.push({
-                                x: CANVAS_W + 100,
-                                y: center + (Math.random() - 0.5) * (gap * 0.4),
-                                w: size, h: size,
-                                type: 'box',
-                                color: `hsl(${(globalHue + 60) % 360}, 100%, 60%)` 
-                            });
-                        } else if (typeRnd < 0.75) { // 30% chance Sawblade
-                            let radius = 25 + Math.random() * 20;
-                            obstacles.push({
-                                x: CANVAS_W + 100,
-                                y: center + (Math.random() - 0.5) * (gap * 0.5),
-                                r: radius,
-                                type: 'sawblade',
-                                rot: 0,
-                                speed: (Math.random() > 0.5 ? 1 : -1) * (0.08 + Math.random() * 0.08),
-                                color: '#ef4444' // Red
-                            });
-                        } else { // 25% chance Moving Gate
-                            let width = 30 + Math.random() * 20;
-                            let height = gap * (0.3 + Math.random() * 0.2);
-                            obstacles.push({
-                                x: CANVAS_W + 100,
-                                y: center,
-                                baseY: center,
-                                w: width, h: height,
-                                type: 'gate',
-                                phase: Math.random() * Math.PI * 2,
-                                speed: 0.03 + Math.random() * 0.04,
-                                amp: gap * 0.25,
-                                color: `hsl(${(globalHue + 120) % 360}, 100%, 60%)`
-                            });
-                        }
-                    }
-                    obstacleTimer = DIFFICULTY_CONFIG[currentDifficulty].obsTimerBase + Math.random() * 300; 
-                }
-
-                // Update Obstacles & Check Collisions
-                for (let i = obstacles.length - 1; i >= 0; i--) {
-                    let obs = obstacles[i];
-                    obs.x -= PLAYER_SPEED;
-                    
-                    if (obs.type === 'gate') {
-                        obs.y = obs.baseY + Math.sin(obs.phase) * obs.amp;
-                        obs.phase += obs.speed;
-                    } else if (obs.type === 'sawblade') {
-                        obs.rot += obs.speed;
-                    }
-
-                    if (obs.x + 100 < 0) {
-                        obstacles.splice(i, 1);
-                        continue;
-                    }
-
-                    // Portal Crossing
-                    if (obs.type === 'portal_grav') {
-                        if (!obs.passed && player.x > obs.x) {
-                            obs.passed = true;
-                            gravityInverted = !gravityInverted;
-                            screenFlash = 0.8;
-                        }
-                    } else {
-                        // Collision Check
-                        let hit = false;
-                        if (obs.type === 'box' || obs.type === 'gate') {
-                            let left = obs.x - obs.w/2;
-                            let right = obs.x + obs.w/2;
-                            let top = obs.y - obs.h/2;
-                            let bottom = obs.y + obs.h/2;
-                            hit = (player.x + player.size > left && player.x - player.size < right &&
-                                   player.y + player.size > top && player.y - player.size < bottom);
-                        } else if (obs.type === 'sawblade') {
-                            let dx = player.x - obs.x;
-                            let dy = player.y - obs.y;
-                            let dist = Math.sqrt(dx*dx + dy*dy);
-                            hit = dist < (obs.r + player.size - 2); 
-                        }
-
-                        if (hit) die();
-                    }
-                }
-                
-                // Visual Updates
-                globalHue = (globalHue + (isOverdrive ? 1.5 : 0.3)) % 360;
-                stars.forEach(s => {
-                    s.x -= s.speed * (PLAYER_SPEED / 2) * (isOverdrive ? 2 : 1);
-                    if(s.x < 0) { s.x = CANVAS_W; s.y = Math.random() * CANVAS_H; }
-                });
-                
-                // Thruster particles
-                if (Math.random() > (isOverdrive ? 0.1 : 0.4)) {
-                    particles.push({
-                        x: player.x - 12,
-                        y: player.y + (isHolding ? -4 : 4),
-                        vx: -Math.random() * 6 - 2,
-                        vy: (Math.random() - 0.5) * (isOverdrive ? 6 : 2),
-                        size: Math.random() * (isOverdrive ? 8 : 5) + 2,
-                        color: isHolding ? '#ec4899' : '#06b6d4',
-                        life: isOverdrive ? 1.2 : 0.8
+    async function extractZip(zipFile) {
+        try {
+            const zip = await JSZip.loadAsync(zipFile);
+            const promises = [];
+            zip.forEach((relativePath, entry) => {
+                if (!entry.dir) {
+                    const p = entry.async('blob').then(async (blob) => {
+                        const file = new File([blob], entry.name.split('/').pop(), { type: getMimeType(entry.name) });
+                        await addFileToVFS(file, relativePath);
                     });
+                    promises.push(p);
                 }
-            }
+            });
+            await Promise.all(promises);
+            renderVFSList();
+            autoRunAssembledProject();
+        } catch (err) {
+            alert("Error unzipping file: " + err.message);
+        }
+    }
 
-            // Update Particles (Runs even in GAMEOVER)
-            for (let i = particles.length - 1; i >= 0; i--) {
-                let p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.vx *= 0.95; // friction
-                p.vy *= 0.95;
-                p.life -= 0.03;
-                if (p.life <= 0) particles.splice(i, 1);
-            }
+    async function addFileToVFS(file, rawPath) {
+        const cleanPath = cleanPathName(rawPath);
+        const fileName = file.name.toLowerCase();
+        const url = URL.createObjectURL(file);
+        
+        let textContent = null;
+        const category = getCategory(fileName);
+
+        if (['html', 'css', 'js', 'text'].includes(category)) {
+            try { textContent = await file.text(); } catch(e){}
         }
 
-        // --- Rendering ---
+        vfs.set(cleanPath, {
+            file,
+            url,
+            text: textContent,
+            cleanPath,
+            rawName: file.name,
+            size: file.size,
+            type: file.type || getMimeType(file.name),
+            category
+        });
 
-        function draw() {
-            // Background
-            if (isOverdrive) {
-                ctx.fillStyle = 'rgba(5, 2, 10, 0.3)'; // Motion blur trail effect
-            } else {
-                ctx.fillStyle = '#05020a'; // Deep space purple-black
-            }
-            ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-
-            if (isOverdrive) {
-                // Pulsing Vignette
-                let grad = ctx.createRadialGradient(CANVAS_W/2, CANVAS_H/2, CANVAS_H/4, CANVAS_W/2, CANVAS_H/2, CANVAS_W);
-                grad.addColorStop(0, 'transparent');
-                grad.addColorStop(1, `hsla(${globalHue}, 100%, 15%, 0.6)`);
-                ctx.fillStyle = grad;
-                ctx.fillRect(0,0,CANVAS_W, CANVAS_H);
-            }
-
-            // Draw Stars
-            ctx.fillStyle = '#ffffff';
-            stars.forEach(s => {
-                ctx.globalAlpha = (Math.sin((Date.now() / 500) + s.x) + 1) / 2 * 0.5 + 0.1;
-                ctx.beginPath();
-                ctx.arc(s.x, s.y, s.size, 0, Math.PI*2);
-                ctx.fill();
-            });
-            ctx.globalAlpha = 1.0;
-
-            // Draw Scrolling Grid (Speed effect)
-            ctx.strokeStyle = `hsla(${globalHue}, 50%, 50%, ${isOverdrive ? 0.2 : 0.08})`;
-            ctx.lineWidth = isOverdrive ? 4 : 2;
-            const gridOffset = (state === 'PLAYING' ? (Date.now() / 10 * PLAYER_SPEED/8) % 50 : 0);
-            for(let x = -gridOffset; x < CANVAS_W; x += 50) {
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CANVAS_H); ctx.stroke();
-            }
-            for(let y = 0; y < CANVAS_H; y += 50) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CANVAS_W, y); ctx.stroke();
-            }
-
-            // Draw Terrain (Walls)
-            if (terrain.length > 0) {
-                // Top Wall Fill
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                for(let i = 0; i < terrain.length; i++) {
-                    ctx.lineTo(i * SEGMENT_WIDTH - terrainXOffset, terrain[i].top);
-                }
-                ctx.lineTo(CANVAS_W, 0);
-                ctx.closePath();
-                ctx.fillStyle = '#010206'; // very dark background
-                ctx.fill();
-
-                // Top Wall Neon Border
-                ctx.beginPath();
-                for(let i = 0; i < terrain.length; i++) {
-                    ctx.lineTo(i * SEGMENT_WIDTH - terrainXOffset, terrain[i].top);
-                }
-                ctx.strokeStyle = `hsl(${globalHue}, 100%, 60%)`; // Dynamic Color
-                ctx.lineWidth = isOverdrive ? 10 : 6;
-                ctx.shadowBlur = isOverdrive ? 40 : 20;
-                ctx.shadowColor = `hsl(${globalHue}, 100%, 60%)`;
-                ctx.stroke();
-
-                // Bottom Wall Fill
-                ctx.beginPath();
-                for(let i = 0; i < terrain.length; i++) {
-                    ctx.lineTo(i * SEGMENT_WIDTH - terrainXOffset, terrain[i].bottom);
-                }
-                ctx.lineTo(CANVAS_W, CANVAS_H);
-                ctx.lineTo(0, CANVAS_H);
-                ctx.closePath();
-                ctx.fillStyle = '#010206';
-                ctx.fill();
-
-                // Bottom Wall Neon Border
-                ctx.beginPath();
-                for(let i = 0; i < terrain.length; i++) {
-                    ctx.lineTo(i * SEGMENT_WIDTH - terrainXOffset, terrain[i].bottom);
-                }
-                ctx.strokeStyle = `hsl(${(globalHue + 180) % 360}, 100%, 60%)`; // Complementary color
-                ctx.lineWidth = isOverdrive ? 10 : 6;
-                ctx.shadowBlur = isOverdrive ? 40 : 20;
-                ctx.shadowColor = `hsl(${(globalHue + 180) % 360}, 100%, 60%)`;
-                ctx.stroke();
-                
-                // Reset shadow for other elements
-                ctx.shadowBlur = 0; 
-            }
-
-            // Draw Obstacles
-            obstacles.forEach(obs => {
-                ctx.save();
-                ctx.translate(obs.x, obs.y);
-                
-                if (obs.type === 'box' || obs.type === 'gate') {
-                    ctx.beginPath();
-                    ctx.rect(-obs.w/2, -obs.h/2, obs.w, obs.h);
-                    ctx.fillStyle = '#010206';
-                    ctx.fill();
-                    
-                    ctx.strokeStyle = obs.color;
-                    ctx.lineWidth = 4;
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = obs.color;
-                    ctx.stroke();
-                    
-                    // Inner deco
-                    ctx.strokeStyle = `${obs.color}44`; 
-                    ctx.lineWidth = 1;
-                    ctx.shadowBlur = 0;
-                    ctx.strokeRect(-obs.w/2 + 6, -obs.h/2 + 6, obs.w - 12, obs.h - 12);
-                    
-                } else if (obs.type === 'sawblade') {
-                    ctx.rotate(obs.rot);
-                    ctx.beginPath();
-                    for(let i=0; i<8; i++) {
-                        let angle = (i / 8) * Math.PI * 2;
-                        ctx.lineTo(Math.cos(angle) * obs.r, Math.sin(angle) * obs.r);
-                        let nextAngle = angle + (Math.PI*2 / 16); // halfway to next
-                        ctx.lineTo(Math.cos(nextAngle) * (obs.r + 8), Math.sin(nextAngle) * (obs.r + 8));
-                    }
-                    ctx.closePath();
-                    
-                    ctx.fillStyle = '#010206';
-                    ctx.fill();
-                    
-                    ctx.strokeStyle = obs.color;
-                    ctx.lineWidth = 4;
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = obs.color;
-                    ctx.stroke();
-                    
-                    // Inner ring
-                    ctx.beginPath();
-                    ctx.arc(0, 0, obs.r * 0.5, 0, Math.PI*2);
-                    ctx.strokeStyle = `${obs.color}88`;
-                    ctx.lineWidth = 2;
-                    ctx.shadowBlur = 0;
-                    ctx.stroke();
-                } else if (obs.type === 'portal_grav') {
-                    ctx.beginPath();
-                    ctx.ellipse(0, 0, obs.w/2, obs.h/2, 0, 0, Math.PI*2);
-                    ctx.strokeStyle = obs.color;
-                    ctx.lineWidth = 6;
-                    ctx.shadowBlur = 20;
-                    ctx.shadowColor = obs.color;
-                    ctx.stroke();
-                    
-                    ctx.fillStyle = `${obs.color}33`; 
-                    ctx.fill();
-                    
-                    // Portal inner animation
-                    let pulse = (Math.sin(Date.now() / 150) + 1) / 2;
-                    ctx.beginPath();
-                    ctx.ellipse(0, 0, obs.w/2 * (0.6 + pulse*0.2), obs.h/2 * (0.8 + pulse*0.1), 0, 0, Math.PI*2);
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 2;
-                    ctx.shadowBlur = 0;
-                    ctx.stroke();
-                }
-                
-                ctx.restore();
-            });
-
-            // Draw Trail
-            if (state === 'PLAYING' && trail.length > 1) {
-                ctx.beginPath();
-                ctx.moveTo(trail[0].x, trail[0].y);
-                for (let i = 1; i < trail.length; i++) {
-                    ctx.lineTo(trail[i].x, trail[i].y);
-                }
-                
-                // Gradient trail based on hue
-                let gradient = ctx.createLinearGradient(trail[0].x, 0, trail[trail.length-1].x, 0);
-                gradient.addColorStop(0, `hsla(${globalHue}, 100%, 50%, 0)`);
-                gradient.addColorStop(1, `hsla(${globalHue}, 100%, 70%, 0.8)`);
-                
-                ctx.strokeStyle = gradient;
-                ctx.lineWidth = player.size * 2.5;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                
-                ctx.globalCompositeOperation = 'lighter';
-                ctx.stroke();
-                ctx.globalCompositeOperation = 'source-over';
-            }
-
-            // Draw Player
-            if (state === 'PLAYING') {
-                ctx.save();
-                ctx.translate(player.x, player.y);
-                
-                // Rotation & Gravity handling
-                let baseRot = 0;
-                if (gameMode === 'WAVE') {
-                    baseRot = isHolding ? -Math.PI/4 : Math.PI/4;
-                    if (gravityInverted) baseRot = isHolding ? Math.PI/4 : -Math.PI/4;
-                } else if (gameMode === 'ROCKET') {
-                    // Rocket rotation based on velocity
-                    baseRot = player.vy * 0.08;
-                } else if (gameMode === 'SAW') {
-                    baseRot = player.rot;
-                }
-                ctx.rotate(baseRot);
-                
-                if (gravityInverted && gameMode !== 'SAW') {
-                    ctx.scale(1, -1);
-                }
-                
-                if (gameMode !== 'SAW') {
-                    // Draw Thruster Glow
-                    ctx.beginPath();
-                    ctx.arc(-10, 0, Math.random() * 4 + 4, 0, Math.PI*2);
-                    ctx.fillStyle = isHolding ? '#ec4899' : '#06b6d4';
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = ctx.fillStyle;
-                    ctx.globalCompositeOperation = 'lighter';
-                    ctx.fill();
-                    ctx.globalCompositeOperation = 'source-over';
-                }
-                
-                if (gameMode === 'WAVE') {
-                    // Draw Dart/Arrow Shape
-                    ctx.beginPath();
-                    ctx.moveTo(16, 0);      // Tip
-                    ctx.lineTo(-12, 12);    // Bottom wing
-                    ctx.lineTo(-6, 0);      // Inner notch
-                    ctx.lineTo(-12, -12);   // Top wing
-                    ctx.closePath();
-                    
-                    ctx.fillStyle = '#ffffff'; 
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = `hsl(${globalHue}, 100%, 70%)`;
-                    ctx.fill();
-                    
-                    ctx.strokeStyle = '#000000';
-                    ctx.lineWidth = 1;
-                    ctx.shadowBlur = 0;
-                    ctx.stroke();
-                    
-                    // Core
-                    ctx.beginPath();
-                    ctx.moveTo(8, 0);
-                    ctx.lineTo(-6, 4);
-                    ctx.lineTo(-2, 0);
-                    ctx.lineTo(-6, -4);
-                    ctx.closePath();
-                    ctx.fillStyle = isHolding ? '#ec4899' : '#06b6d4';
-                    ctx.fill();
-                } else if (gameMode === 'ROCKET') {
-                    // Draw Rocket Shape
-                    // Main Body (Cylinder/Pill)
-                    ctx.beginPath();
-                    ctx.ellipse(2, 0, 16, 8, 0, 0, Math.PI*2);
-                    ctx.fillStyle = '#ffffff';
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = `hsl(${globalHue}, 100%, 70%)`;
-                    ctx.fill();
-                    ctx.lineWidth = 1;
-                    ctx.strokeStyle = '#000000';
-                    ctx.shadowBlur = 0;
-                    ctx.stroke();
-                    
-                    // Front Window/Cockpit
-                    ctx.beginPath();
-                    ctx.arc(10, -2, 4, 0, Math.PI*2);
-                    ctx.fillStyle = '#06b6d4';
-                    ctx.fill();
-                    
-                    // Top and Bottom Fins
-                    ctx.fillStyle = isHolding ? '#ec4899' : '#06b6d4';
-                    ctx.beginPath(); ctx.moveTo(-6, 7); ctx.lineTo(-14, 15); ctx.lineTo(0, 7); ctx.fill();
-                    ctx.beginPath(); ctx.moveTo(-6, -7); ctx.lineTo(-14, -15); ctx.lineTo(0, -7); ctx.fill();
-                    
-                    // Tail Thruster Engine
-                    ctx.beginPath();
-                    ctx.rect(-16, -4, 4, 8);
-                    ctx.fillStyle = '#334155';
-                    ctx.fill();
-                } else if (gameMode === 'SAW') {
-                    // Draw Sawblade / Ball
-                    ctx.beginPath();
-                    for(let i=0; i<12; i++) {
-                        let angle = (i / 12) * Math.PI * 2;
-                        let outer = 12;
-                        let inner = 8;
-                        ctx.lineTo(Math.cos(angle - 0.1) * inner, Math.sin(angle - 0.1) * inner);
-                        ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
-                        ctx.lineTo(Math.cos(angle + 0.1) * outer, Math.sin(angle + 0.1) * outer);
-                    }
-                    ctx.closePath();
-                    
-                    ctx.fillStyle = '#010206';
-                    ctx.fill();
-                    
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 2;
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = `hsl(${globalHue}, 100%, 70%)`;
-                    ctx.stroke();
-                    
-                    // Core
-                    ctx.beginPath();
-                    ctx.arc(0, 0, 4, 0, Math.PI*2);
-                    ctx.fillStyle = gravityInverted ? '#3b82f6' : '#a855f7'; 
-                    ctx.fill();
-                }
-
-                ctx.restore();
-            }
-
-            // Draw Particles
-            ctx.globalCompositeOperation = 'lighter';
-            particles.forEach(p => {
-                ctx.globalAlpha = Math.max(0, p.life);
-                ctx.fillStyle = p.color;
-                ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
-            });
-            ctx.globalAlpha = 1.0;
-            ctx.globalCompositeOperation = 'source-over';
-            
-            // Screen Flash Effect
-            if (screenFlash > 0) {
-                ctx.fillStyle = `rgba(255, 255, 255, ${screenFlash})`;
-                ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-                screenFlash -= 0.03;
-            }
+        if (!vfs.has(fileName)) {
+            vfs.set(fileName, vfs.get(cleanPath));
         }
+    }
 
-        // --- Main Game Loop ---
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
+    function cleanPathName(path) {
+        let p = path.replace(/\\/g, '/').toLowerCase();
+        p = p.replace(/^(\.\/|\/)+/, '');
+        return p;
+    }
 
-        // --- Event Listeners ---
-        const handleInputDown = (e) => {
-            // Prevent default zooming/scrolling on touch
-            if (e.type === 'touchstart') e.preventDefault(); 
-            if (state === 'PLAYING') {
-                isHolding = true;
-                
-                // Saw Dash click-to-flip mechanics
-                if (gameMode === 'SAW' && player.isGrounded) {
-                    gravityInverted = !gravityInverted;
-                    player.isGrounded = false;
-                    // Add a tiny kick-off velocity so it detaches immediately
-                    player.vy = gravityInverted ? -PLAYER_SPEED * 0.5 : PLAYER_SPEED * 0.5;
-                }
-            }
+    function getCategory(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        if (['html', 'htm'].includes(ext)) return 'html';
+        if (['css'].includes(ext)) return 'css';
+        if (['js', 'mjs'].includes(ext)) return 'js';
+        if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext)) return 'img';
+        if (['mp3', 'wav', 'ogg', 'flac', 'aac', 'mp4', 'webm', 'ogv'].includes(ext)) return 'media';
+        return 'text';
+    }
+
+    function getMimeType(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        const mimes = {
+            'html': 'text/html', 'htm': 'text/html', 'css': 'text/css', 'js': 'text/javascript',
+            'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif',
+            'svg': 'image/svg+xml', 'webp': 'image/webp', 'mp3': 'audio/mpeg', 'wav': 'audio/wav',
+            'ogg': 'audio/ogg', 'mp4': 'video/mp4', 'webm': 'video/webm', 'json': 'application/json'
         };
+        return mimes[ext] || 'application/octet-stream';
+    }
 
-        const handleInputUp = (e) => {
-            if (e.type === 'touchend') e.preventDefault();
-            if (state === 'PLAYING') isHolding = false;
-        };
+    function renderVFSList() {
+        fileCountEl.textContent = vfs.size;
+        if (vfs.size === 0) {
+            fileListEl.innerHTML = `<p class="placeholder" style="font-size: 0.85rem;">No files loaded into memory.</p>`;
+            return;
+        }
 
-        // Window interaction for wave mechanics
-        window.addEventListener('mousedown', handleInputDown, {passive: false});
-        window.addEventListener('touchstart', handleInputDown, {passive: false});
-        window.addEventListener('mouseup', handleInputUp);
-        window.addEventListener('touchend', handleInputUp);
+        fileListEl.innerHTML = '';
+        const uniqueEntries = Array.from(vfs.values()).filter((item, idx, self) => 
+            idx === self.findIndex(t => t.cleanPath === item.cleanPath)
+        );
 
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' || e.code === 'ArrowUp') {
-                e.preventDefault();
-                handleInputDown(e);
+        uniqueEntries.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'file-item';
+            div.onclick = () => selectAndPlay(item.cleanPath);
+
+            let badgeClass = 'badge-media';
+            if (item.category === 'html') badgeClass = 'badge-html';
+            else if (item.category === 'css') badgeClass = 'badge-css';
+            else if (item.category === 'js') badgeClass = 'badge-js';
+            else if (item.category === 'img') badgeClass = 'badge-img';
+
+            div.innerHTML = `
+                <div class="file-info">
+                    <div class="file-name" title="${item.cleanPath}">
+                        ${item.rawName}
+                        <span class="file-badge ${badgeClass}">${item.category}</span>
+                    </div>
+                    <div class="file-size">${formatBytes(item.size)}</div>
+                </div>
+            `;
+            fileListEl.appendChild(div);
+        });
+    }
+
+    function clearVFS() {
+        vfs.clear();
+        clearActiveGame();
+        renderVFSList();
+        assemblyBanner.style.display = 'none';
+        mediaDisplay.innerHTML = `<p class="placeholder">Upload files or click <b>Play Retro Arcade</b> to start playing!</p>`;
+    }
+
+    function autoRunAssembledProject() {
+        const entries = Array.from(vfs.values());
+        const htmlEntry = entries.find(e => e.rawName.toLowerCase() === 'index.html') || entries.find(e => e.category === 'html');
+
+        if (htmlEntry) {
+            launchAssembledApp(htmlEntry.cleanPath);
+        } else if (entries.length > 0) {
+            selectAndPlay(entries[0].cleanPath);
+        }
+    }
+
+    function resolveVFSPath(query) {
+        if (!query || typeof query !== 'string') return null;
+        let clean = cleanPathName(query);
+
+        if (vfs.has(clean)) return vfs.get(clean);
+
+        for (const [key, val] of vfs.entries()) {
+            if (key.endsWith(clean) || clean.endsWith(key) || val.rawName.toLowerCase() === clean) {
+                return val;
             }
-        });
-        window.addEventListener('keyup', (e) => {
-            if (e.code === 'Space' || e.code === 'ArrowUp') handleInputUp(e);
+        }
+        return null;
+    }
+
+    // --- DEEP ASSEMBLY PIPELINE ---
+    async function assembleHTML(mainHtmlPath) {
+        const htmlEntry = vfs.get(mainHtmlPath);
+        if (!htmlEntry || !htmlEntry.text) return '';
+
+        let html = htmlEntry.text;
+
+        // 1. Resolve and Inline CSS files
+        html = html.replace(/<link[^>]+href=["']([^"']+)["'][^>]*>/gi, (match, href) => {
+            const cssItem = resolveVFSPath(href);
+            if (cssItem && cssItem.text) {
+                const resolvedCSS = resolveCSSUrls(cssItem.text);
+                return `<style>/* Injected from ${href} */\n${resolvedCSS}</style>`;
+            }
+            return match;
         });
 
-        // UI Buttons
-        document.getElementById('startBtn').addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent immediately making wave jump
-            initGame();
+        // 2. Resolve CSS inside existing <style> tags
+        html = html.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (match, cssContent) => {
+            return `<style>${resolveCSSUrls(cssContent)}</style>`;
         });
 
-        document.getElementById('restartBtn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            gameOverMenu.classList.add('hidden');
-            gameOverMenu.classList.remove('flex');
-            initGame();
+        // 3. Resolve and Inline JS files
+        html = html.replace(/<script[^>]+src=["']([^"']+)["'][^>]*>\s*<\/script>/gi, (match, src) => {
+            const jsItem = resolveVFSPath(src);
+            if (jsItem && jsItem.text) {
+                return `<script>/* Injected from ${src} */\n${jsItem.text}<\/script>`;
+            }
+            return match;
         });
 
-        // Difficulty Selection Logic
-        const diffButtons = document.querySelectorAll('.diff-btn');
-        diffButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                currentDifficulty = btn.dataset.diff;
+        // 4. Resolve static Image / Media src attributes
+        html = html.replace(/(<img|<audio|<video|<source|<input)\b[^>]*?\bsrc=["']([^"']+)["']/gi, (match, tag, src) => {
+            const assetItem = resolveVFSPath(src);
+            if (assetItem) {
+                return match.replace(src, assetItem.url);
+            }
+            return match;
+        });
+
+        // 5. Inject Interceptor Matrix + Canvas Scaling & Alignment CSS Fix
+        const vfsMapObj = {};
+        vfs.forEach((val, key) => { vfsMapObj[key] = val.url; vfsMapObj[val.rawName.toLowerCase()] = val.url; });
+
+        const runtimeInterceptor = `
+        <style>
+            /* Auto-scaling and alignment reset */
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                overflow: hidden !important;
+                background-color: #000 !important;
+            }
+            canvas, #MMFCanvas, #canvas {
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: contain !important;
+                display: block !important;
+            }
+        </style>
+        <script>
+        (function() {
+            const vfsMap = ${JSON.stringify(vfsMapObj)};
+
+            function resolve(url) {
+                if (!url || typeof url !== 'string') return url;
+                if (url.startsWith('blob:') || url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) return url;
                 
-                // Update UI for all buttons
-                diffButtons.forEach(b => {
-                    const diff = b.dataset.diff;
-                    if (diff === currentDifficulty) {
-                        b.classList.add(DIFFICULTY_CONFIG[diff].colorBtn, 'text-slate-900');
-                        b.classList.remove(DIFFICULTY_CONFIG[diff].colorText, 'hover:bg-white/10');
-                    } else {
-                        b.classList.remove(DIFFICULTY_CONFIG[diff].colorBtn, 'text-slate-900');
-                        b.classList.add(DIFFICULTY_CONFIG[diff].colorText, 'hover:bg-white/10');
-                    }
+                let base = url.split('?')[0].split('#')[0];
+                let clean = base.replace(/\\\\/g, '/').replace(/^(\\.\\/|\\/)+/, '').toLowerCase();
+                if (vfsMap[clean]) return vfsMap[clean];
+
+                let justName = clean.split('/').pop();
+                if (vfsMap[justName]) return vfsMap[justName];
+
+                for (let k in vfsMap) {
+                    if (k.endsWith(clean) || clean.endsWith(k)) return vfsMap[k];
+                }
+                
+                console.warn("[Engine] Missing asset requested by game:", url);
+                return url;
+            }
+
+            const imgDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+            if (imgDesc && imgDesc.set) {
+                Object.defineProperty(HTMLImageElement.prototype, 'src', {
+                    set: function(val) { imgDesc.set.call(this, resolve(val)); },
+                    get: function() { return imgDesc.get.call(this); }
                 });
+            }
+
+            const mediaDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
+            if (mediaDesc && mediaDesc.set) {
+                Object.defineProperty(HTMLMediaElement.prototype, 'src', {
+                    set: function(val) { mediaDesc.set.call(this, resolve(val)); },
+                    get: function() { return mediaDesc.get.call(this); }
+                });
+            }
+
+            const origSetAttr = Element.prototype.setAttribute;
+            Element.prototype.setAttribute = function(name, value) {
+                if (name.toLowerCase() === 'src') {
+                    value = resolve(value);
+                }
+                return origSetAttr.call(this, name, value);
+            };
+
+            const origAudio = window.Audio;
+            window.Audio = function(src) {
+                return new origAudio(resolve(src));
+            };
+
+            const origFetch = window.fetch;
+            window.fetch = function(input, init) {
+                if (typeof input === 'string') input = resolve(input);
+                return origFetch.call(this, input, init);
+            };
+
+            const origOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url, ...args) {
+                return origOpen.call(this, method, resolve(url), ...args);
+            };
+        })();
+        <\/script>
+        `;
+
+        if (html.includes('<head>')) {
+            html = html.replace('<head>', '<head>' + runtimeInterceptor);
+        } else {
+            html = runtimeInterceptor + html;
+        }
+
+        return html;
+    }
+
+    function resolveCSSUrls(cssText) {
+        return cssText.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (match, quote, path) => {
+            const assetItem = resolveVFSPath(path);
+            if (assetItem) {
+                return `url("${assetItem.url}")`;
+            }
+            return match;
+        });
+    }
+
+    async function launchAssembledApp(htmlPath) {
+        clearActiveGame();
+        mediaDisplay.innerHTML = '';
+
+        const assembledCode = await assembleHTML(htmlPath);
+
+        assemblyBanner.style.display = 'flex';
+        assemblyBanner.className = 'assembly-status';
+        assemblyBanner.innerHTML = `
+            <span>✨ <b>Fully Assembled App Running:</b> stitched ${vfs.size} assets together!</span>
+            <div class="banner-buttons">
+                <button class="btn btn-game" style="padding: 3px 8px; font-size: 0.75rem;" onclick="toggleFullscreenIframe()">📺 Fullscreen Game</button>
+                <button class="btn" style="padding: 3px 8px; font-size: 0.75rem; background: var(--border);" onclick="launchAssembledApp('${htmlPath}')">🔄 Reload</button>
+            </div>
+        `;
+
+        const iframe = document.createElement('iframe');
+        iframe.id = "game-iframe";
+        iframe.sandbox = "allow-scripts allow-same-origin allow-modals allow-forms";
+        
+        // Use a Blob URL instead of srcdoc so the game engine has a valid origin for loading assets!
+        const blob = new Blob([assembledCode], { type: 'text/html' });
+        iframe.src = URL.createObjectURL(blob);
+        
+        mediaDisplay.appendChild(iframe);
+        
+        // Auto-focus the game so keyboard/mouse inputs work immediately
+        iframe.onload = () => iframe.focus();
+    }
+
+    function toggleFullscreenIframe() {
+        const iframe = document.getElementById('game-iframe');
+        if (!iframe) return;
+
+        if (iframe.requestFullscreen) {
+            iframe.requestFullscreen();
+        } else if (iframe.webkitRequestFullscreen) {
+            iframe.webkitRequestFullscreen();
+        } else if (iframe.msRequestFullscreen) {
+            iframe.msRequestFullscreen();
+        }
+    }
+
+    function selectAndPlay(cleanPath) {
+        const item = vfs.get(cleanPath);
+        if (!item) return;
+
+        if (item.category === 'html') {
+            launchAssembledApp(cleanPath);
+            return;
+        }
+
+        clearActiveGame();
+        assemblyBanner.style.display = 'none';
+        mediaDisplay.innerHTML = '';
+
+        if (item.type.startsWith('video/')) {
+            const video = document.createElement('video');
+            video.src = item.url;
+            video.controls = true;
+            video.autoplay = true;
+            mediaDisplay.appendChild(video);
+        } else if (item.type.startsWith('audio/')) {
+            const title = document.createElement('h4');
+            title.style.marginBottom = '1.5rem';
+            title.textContent = `🎵 ${item.rawName}`;
+            const audio = document.createElement('audio');
+            audio.src = item.url;
+            audio.controls = true;
+            audio.autoplay = true;
+            mediaDisplay.appendChild(title);
+            mediaDisplay.appendChild(audio);
+        } else if (item.type.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.src = item.url;
+            img.alt = item.rawName;
+            mediaDisplay.appendChild(img);
+        } else if (item.text) {
+            const pre = document.createElement('pre');
+            pre.textContent = item.text;
+            mediaDisplay.appendChild(pre);
+        } else {
+            mediaDisplay.innerHTML = `
+                <div style="text-align: center;">
+                    <p style="margin-bottom: 1rem; color: var(--text-muted);">Direct preview not available for this binary file.</p>
+                    <a href="${item.url}" download="${item.rawName}" class="btn">Download File</a>
+                </div>
+            `;
+        }
+    }
+
+    function clearActiveGame() {
+        if (gameInterval) {
+            clearInterval(gameInterval);
+            gameInterval = null;
+        }
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 Bytes';
+        const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // --- BUILT-IN RETRO ARCADE ---
+    function launchBuiltInArcade() {
+        clearActiveGame();
+        assemblyBanner.style.display = 'none';
+        mediaDisplay.innerHTML = `
+            <h3 style="margin-bottom: 0.5rem; color: #10b981;">🐍 Retro Snake Arcade</h3>
+            <canvas id="game-canvas" width="360" height="360"></canvas>
+            <div class="game-controls-info" style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted);">
+                Use <b>Arrow Keys</b> or <b>WASD</b> to move. Score: <span id="game-score" style="color: white; font-weight: bold;">0</span>
+            </div>
+        `;
+
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const gridSize = 18;
+        const tileCount = canvas.width / gridSize;
+
+        let snake = [{ x: 10, y: 10 }];
+        let food = { x: 15, y: 15 };
+        let dx = 0, dy = 0;
+        let score = 0;
+        let gameStarted = false;
+
+        function drawGame() {
+            if (gameStarted) {
+                const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+                if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount ||
+                    snake.some(seg => seg.x === head.x && seg.y === head.y)) {
+                    alert(`Game Over! Final Score: ${score}`);
+                    snake = [{ x: 10, y: 10 }];
+                    dx = 0; dy = 0; score = 0; gameStarted = false;
+                    document.getElementById('game-score').textContent = score;
+                    return;
+                }
+
+                snake.unshift(head);
+
+                if (head.x === food.x && head.y === food.y) {
+                    score += 10;
+                    document.getElementById('game-score').textContent = score;
+                    food = { x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount) };
+                } else {
+                    snake.pop();
+                }
+            }
+
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc((food.x + 0.5) * gridSize, (food.y + 0.5) * gridSize, gridSize/2 - 1, 0, Math.PI * 2);
+            ctx.fill();
+
+            snake.forEach((seg, i) => {
+                ctx.fillStyle = i === 0 ? '#34d399' : '#10b981';
+                ctx.fillRect(seg.x * gridSize + 1, seg.y * gridSize + 1, gridSize - 2, gridSize - 2);
             });
-        });
 
-        // Modifiers Logic
-        const btnVisuals = document.getElementById('btnVisuals');
-        btnVisuals.addEventListener('click', (e) => {
-            e.stopPropagation();
-            isOverdrive = !isOverdrive;
-            if (isOverdrive) {
-                btnVisuals.classList.add('bg-purple-500', 'text-white');
-                btnVisuals.classList.remove('text-purple-500');
-            } else {
-                btnVisuals.classList.remove('bg-purple-500', 'text-white');
-                btnVisuals.classList.add('text-purple-500');
+            if (!gameStarted) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.font = '14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Press Arrow Key or WASD to Start', canvas.width / 2, canvas.height / 2);
             }
-        });
+        }
 
-        const btnNoReverse = document.getElementById('btnNoReverse');
-        btnNoReverse.addEventListener('click', (e) => {
-            e.stopPropagation();
-            isNoReverse = !isNoReverse;
-            if (isNoReverse) {
-                btnNoReverse.classList.add('bg-blue-500', 'text-white');
-                btnNoReverse.classList.remove('text-blue-500');
-            } else {
-                btnNoReverse.classList.remove('bg-blue-500', 'text-white');
-                btnNoReverse.classList.add('text-blue-500');
-            }
-        });
+        function handleKeydown(e) {
+            const keys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyS', 'KeyA', 'KeyD'];
+            if (!keys.includes(e.code)) return;
+            e.preventDefault();
 
-        // Mode Switching Logic
-        const modeSwitchBtn = document.getElementById('modeSwitchBtn');
-        const modeIcon = document.getElementById('modeIcon');
-        const modeText = document.getElementById('modeText');
-        const mainTitle = document.querySelector('#startMenu h1');
-        const mainSubtitle = document.querySelector('#startMenu p');
+            if (e.code === 'ArrowUp' || e.code === 'KeyW') { if (dy !== 1) { dx = 0; dy = -1; gameStarted = true; } }
+            else if (e.code === 'ArrowDown' || e.code === 'KeyS') { if (dy !== -1) { dx = 0; dy = 1; gameStarted = true; } }
+            else if (e.code === 'ArrowLeft' || e.code === 'KeyA') { if (dx !== 1) { dx = -1; dy = 0; gameStarted = true; } }
+            else if (e.code === 'ArrowRight' || e.code === 'KeyD') { if (dx !== -1) { dx = 1; dy = 0; gameStarted = true; } }
+        }
 
-        modeSwitchBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (gameMode === 'WAVE') {
-                gameMode = 'ROCKET';
-                modeIcon.innerText = '⚙️';
-                modeText.innerText = 'SAW DASH';
-                mainTitle.innerText = 'ROCKET DASH';
-                mainTitle.classList.replace('from-pink-500', 'from-orange-500');
-                mainTitle.classList.replace('to-cyan-500', 'to-yellow-500');
-                mainSubtitle.innerText = 'Hold to THRUST, Release to FALL';
-            } else if (gameMode === 'ROCKET') {
-                gameMode = 'SAW';
-                modeIcon.innerText = '🌊';
-                modeText.innerText = 'WAVE DASH';
-                mainTitle.innerText = 'SAW DASH';
-                mainTitle.classList.replace('from-orange-500', 'from-red-500');
-                mainTitle.classList.replace('to-yellow-500', 'to-purple-500');
-                mainSubtitle.innerText = 'Tap to FLIP GRAVITY (On surfaces only)';
-            } else {
-                gameMode = 'WAVE';
-                modeIcon.innerText = '🚀';
-                modeText.innerText = 'ROCKET DASH';
-                mainTitle.innerText = 'WAVE DASH';
-                mainTitle.classList.replace('from-red-500', 'from-pink-500');
-                mainTitle.classList.replace('to-purple-500', 'to-cyan-500');
-                mainSubtitle.innerText = 'Hold to fly UP, Release to dive DOWN';
-            }
-        });
-
-        // Start Loop
-        requestAnimationFrame(loop);
-    </script>
+        window.removeEventListener('keydown', handleKeydown);
+        window.addEventListener('keydown', handleKeydown);
+        gameInterval = setInterval(drawGame, 100);
+    }
+</script>
 </body>
 </html>
