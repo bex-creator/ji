@@ -101,6 +101,12 @@
             gap: 1.5rem;
         }
 
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
         @media (max-width: 850px) {
             .main-layout { grid-template-columns: 1fr; }
         }
@@ -167,6 +173,68 @@
         .badge-js { background: #eab30830; color: #fde047; }
         .badge-img { background: #ec489930; color: #f472b6; }
         .badge-media { background: #a855f730; color: #c084fc; }
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.65rem 0.8rem;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 0.5rem;
+            background-color: #0f172a50;
+            border: 1px solid transparent;
+            transition: background 0.2s, border 0.2s;
+        }
+
+        .history-item:hover {
+            background-color: #334155;
+        }
+
+        .history-item.active {
+            border-color: var(--game-accent);
+            background-color: #10b98120;
+        }
+
+        .history-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            overflow: hidden;
+            width: 100%;
+            padding-right: 0.5rem;
+        }
+
+        .history-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+
+        .history-date {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: color 0.2s, background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-icon:hover {
+            color: #ef4444;
+            background: #ef444420;
+        }
 
         .file-size { font-size: 0.75rem; color: var(--text-muted); }
 
@@ -268,12 +336,23 @@
     </div>
 
     <div class="main-layout">
-        <div class="file-list-card">
-            <div class="file-list-header">
-                <h3>Assembled VFS (<span id="file-count">0</span>)</h3>
+        <div class="sidebar">
+            <div class="file-list-card" style="max-height: 350px;">
+                <div class="file-list-header">
+                    <h3>Game Library (<span id="history-count">0</span>)</h3>
+                </div>
+                <div class="file-items-container" id="history-list">
+                    <p class="placeholder" style="font-size: 0.85rem;">No saved games.</p>
+                </div>
             </div>
-            <div class="file-items-container" id="file-list">
-                <p class="placeholder" style="font-size: 0.85rem;">No files loaded into memory.</p>
+
+            <div class="file-list-card" style="max-height: 400px;">
+                <div class="file-list-header">
+                    <h3>Current VFS (<span id="file-count">0</span>)</h3>
+                </div>
+                <div class="file-items-container" id="file-list">
+                    <p class="placeholder" style="font-size: 0.85rem;">No files loaded into memory.</p>
+                </div>
             </div>
         </div>
 
@@ -292,12 +371,16 @@
     let gameInterval = null;
     let db = null;
     const dbName = "UniversalFileEngineDB";
-    const storeName = "vfsFiles";
+    const storeName = "projects";
+    let currentProjectId = null;
+    let allProjects = [];
 
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
     const folderInput = document.getElementById('folder-input');
     const fileListEl = document.getElementById('file-list');
+    const historyListEl = document.getElementById('history-list');
+    const historyCountEl = document.getElementById('history-count');
     const mediaDisplay = document.getElementById('media-display');
     const fileCountEl = document.getElementById('file-count');
     const assemblyBanner = document.getElementById('assembly-banner');
@@ -305,11 +388,14 @@
     // --- INDEXEDDB STORAGE INITIALIZATION ---
     async function initStorage() {
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(dbName, 1);
+            const request = indexedDB.open(dbName, 2);
             request.onupgradeneeded = (e) => {
                 const database = e.target.result;
                 if (!database.objectStoreNames.contains(storeName)) {
-                    database.createObjectStore(storeName, { keyPath: "cleanPath" });
+                    database.createObjectStore(storeName, { keyPath: "id" });
+                }
+                if (database.objectStoreNames.contains('vfsFiles')) {
+                    database.deleteObjectStore('vfsFiles'); // Clean up old schema
                 }
             };
             request.onsuccess = (e) => {
@@ -320,33 +406,25 @@
         });
     }
 
-    function loadVFSFromDB() {
+    function loadInitialHistory() {
         if (!db) return;
         const tx = db.transaction(storeName, 'readonly');
         const store = tx.objectStore(storeName);
         const request = store.getAll();
 
         request.onsuccess = (e) => {
-            const items = e.target.result;
-            if (items.length > 0) {
-                items.forEach(item => {
-                    // Re-generate fresh object URLs for the loaded files
-                    item.url = URL.createObjectURL(item.file);
-                    vfs.set(item.cleanPath, item);
-                    
-                    const fileName = item.rawName.toLowerCase();
-                    if (!vfs.has(fileName)) {
-                        vfs.set(fileName, item);
-                    }
-                });
-                renderVFSList();
-                autoRunAssembledProject();
+            allProjects = e.target.result;
+            allProjects.sort((a, b) => b.timestamp - a.timestamp); // Newest first
+            renderHistoryList();
+            
+            if (allProjects.length > 0) {
+                loadProject(allProjects[0]);
             }
         };
     }
 
-    // Initialize DB on script load, then populate VFS
-    initStorage().then(() => loadVFSFromDB()).catch(e => console.error("Database init failed:", e));
+    // Initialize DB on script load, then populate History
+    initStorage().then(() => loadInitialHistory()).catch(e => console.error("Database init failed:", e));
 
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => dropZone.addEventListener(evt, preventDefaults, false));
     function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
@@ -405,48 +483,68 @@
         return fileEntries;
     }
 
-    async function processFiles(fileEntries) {
-        if (fileEntries.length === 0) return;
+    async function processFiles(originalEntries) {
+        if (originalEntries.length === 0) return;
 
-        const zipEntry = fileEntries.find(e => e.file.name.toLowerCase().endsWith('.zip'));
+        let entriesToProcess = originalEntries;
+        let projectName = "Untitled Project";
+
+        const zipEntry = originalEntries.find(e => e.file.name.toLowerCase().endsWith('.zip'));
         if (zipEntry) {
-            await extractZip(zipEntry.file);
-            return;
+            entriesToProcess = await extractZip(zipEntry.file);
+            projectName = zipEntry.file.name.replace(/\.zip$/i, '');
+        } else if (originalEntries.length > 0) {
+            const firstPath = originalEntries[0].path;
+            if (firstPath.includes('/')) {
+                projectName = firstPath.split('/')[0];
+            } else if (originalEntries.length === 1) {
+                projectName = originalEntries[0].file.name;
+            } else {
+                projectName = `Upload ${new Date().toLocaleTimeString()}`;
+            }
         }
 
-        for (const { file, path } of fileEntries) {
-            await addFileToVFS(file, path);
+        const projectItems = [];
+        for (const { file, path } of entriesToProcess) {
+            projectItems.push(await createVFSItem(file, path));
         }
 
-        renderVFSList();
-        autoRunAssembledProject();
+        const project = {
+            id: Date.now().toString(),
+            name: projectName,
+            timestamp: Date.now(),
+            files: projectItems
+        };
+
+        await saveProject(project);
+        loadProject(project);
     }
 
     async function extractZip(zipFile) {
         try {
             const zip = await JSZip.loadAsync(zipFile);
+            const entries = [];
             const promises = [];
             zip.forEach((relativePath, entry) => {
                 if (!entry.dir) {
-                    const p = entry.async('blob').then(async (blob) => {
+                    const p = entry.async('blob').then((blob) => {
                         const file = new File([blob], entry.name.split('/').pop(), { type: getMimeType(entry.name) });
-                        await addFileToVFS(file, relativePath);
+                        entries.push({ file, path: relativePath });
                     });
                     promises.push(p);
                 }
             });
             await Promise.all(promises);
-            renderVFSList();
-            autoRunAssembledProject();
+            return entries;
         } catch (err) {
             alert("Error unzipping file: " + err.message);
+            return [];
         }
     }
 
-    async function addFileToVFS(file, rawPath) {
+    async function createVFSItem(file, rawPath) {
         const cleanPath = cleanPathName(rawPath);
         const fileName = file.name.toLowerCase();
-        const url = URL.createObjectURL(file);
         
         let textContent = null;
         const category = getCategory(fileName);
@@ -455,9 +553,8 @@
             try { textContent = await file.text(); } catch(e){}
         }
 
-        const vfsItem = {
+        return {
             file,
-            url,
             text: textContent,
             cleanPath,
             rawName: file.name,
@@ -465,20 +562,86 @@
             type: file.type || getMimeType(file.name),
             category
         };
+    }
 
-        vfs.set(cleanPath, vfsItem);
-
-        if (!vfs.has(fileName)) {
-            vfs.set(fileName, vfsItem);
-        }
-
-        // Save to IndexedDB persistently
+    async function saveProject(project) {
+        allProjects = [project, ...allProjects.filter(p => p.id !== project.id)];
+        renderHistoryList();
+        
         if (db) {
-            const dbItem = { ...vfsItem };
-            delete dbItem.url; // We don't save URLs because Object URLs expire on page reload
             const tx = db.transaction(storeName, 'readwrite');
-            tx.objectStore(storeName).put(dbItem);
+            tx.objectStore(storeName).put(project);
         }
+    }
+
+    function loadProject(project) {
+        currentProjectId = project.id;
+        vfs.clear();
+        
+        project.files.forEach(item => {
+            const url = URL.createObjectURL(item.file);
+            const vfsItem = { ...item, url };
+            vfs.set(vfsItem.cleanPath, vfsItem);
+            
+            const fileName = vfsItem.rawName.toLowerCase();
+            if (!vfs.has(fileName)) {
+                vfs.set(fileName, vfsItem);
+            }
+        });
+        
+        renderVFSList();
+        renderHistoryList();
+        autoRunAssembledProject();
+    }
+
+    function deleteProject(id, event) {
+        event.stopPropagation();
+        
+        allProjects = allProjects.filter(p => p.id !== id);
+        renderHistoryList();
+        
+        if (db) {
+            const tx = db.transaction(storeName, 'readwrite');
+            tx.objectStore(storeName).delete(id);
+        }
+        
+        if (currentProjectId === id) {
+            clearVFS();
+            if (allProjects.length > 0) {
+                loadProject(allProjects[0]);
+            }
+        }
+    }
+
+    function renderHistoryList() {
+        historyCountEl.textContent = allProjects.length;
+        if (allProjects.length === 0) {
+            historyListEl.innerHTML = `<p class="placeholder" style="font-size: 0.85rem;">No saved games.</p>`;
+            return;
+        }
+
+        historyListEl.innerHTML = '';
+        allProjects.forEach(proj => {
+            const div = document.createElement('div');
+            div.className = `history-item ${currentProjectId === proj.id ? 'active' : ''}`;
+            div.onclick = () => loadProject(proj);
+            
+            const date = new Date(proj.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' });
+
+            div.innerHTML = `
+                <div class="history-info">
+                    <div class="history-name" title="${proj.name}">${proj.name}</div>
+                    <div class="history-date">${date} &bull; ${proj.files.length} files</div>
+                </div>
+                <button class="btn-icon" onclick="deleteProject('${proj.id}', event)" title="Delete Game">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                        <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                    </svg>
+                </button>
+            `;
+            historyListEl.appendChild(div);
+        });
     }
 
     function cleanPathName(path) {
@@ -546,16 +709,12 @@
 
     function clearVFS() {
         vfs.clear();
+        currentProjectId = null;
         clearActiveGame();
         renderVFSList();
+        renderHistoryList();
         assemblyBanner.style.display = 'none';
         mediaDisplay.innerHTML = `<p class="placeholder">Upload files or click <b>Play Retro Arcade</b> to start playing!</p>`;
-        
-        // Clear IndexedDB storage
-        if (db) {
-            const tx = db.transaction(storeName, 'readwrite');
-            tx.objectStore(storeName).clear();
-        }
     }
 
     function autoRunAssembledProject() {
